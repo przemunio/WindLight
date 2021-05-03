@@ -1,13 +1,12 @@
 int relayOut = 2;
 int buzzerOut = 3;
-int lightDetectorIn = 8;
+int lightDetectorIn = A0;
 
 void setup() {
   // put your setup code here, to run once:
   Serial.begin(9600);
   pinMode(relayOut, OUTPUT);
   pinMode(buzzerOut, OUTPUT);
-  pinMode(lightDetectorIn, INPUT);
   pinMode(LED_BUILTIN, OUTPUT);
 }
 
@@ -52,9 +51,51 @@ void ledOff()
     digitalWrite(LED_BUILTIN,LOW);
 }
 
+
+
 bool isLightDetected()
-{
-  return digitalRead(lightDetectorIn)==LOW;
+{  
+  const unsigned long debounceDelay = 500;    // the debounce time; increase if the output flickers
+
+  static unsigned long lastReading = 0;
+  static bool lastState = false;   // the previous reading from the input pin
+  static bool state = false;
+  static unsigned long lastDebounceTime = 0;  // the last time the output pin was toggled
+
+
+  if((millis() - lastReading) < 100)
+    return state;
+
+  lastReading = millis();
+  
+  
+  bool reading = analogRead(lightDetectorIn) > 30;
+
+  if (reading != lastState) {
+    lastDebounceTime = millis();
+    Serial.print("Debounce: different state, reading: ");
+    Serial.print(reading);
+    Serial.print(" last state: ");
+    Serial.print(lastState);
+    Serial.print(" STATE: ");
+    Serial.println(state);
+  }
+
+  if ((millis() - lastDebounceTime) > debounceDelay) {
+      if (reading != state) {
+            Serial.print("Debounce: time!, reading: ");
+            Serial.print(reading);
+        
+            Serial.print(" STATE: ");
+            Serial.println(state);
+            state = reading;
+      }
+  }
+
+  lastState = reading;
+
+
+  return state;
 }
 
 bool isDarkDetected()
@@ -75,7 +116,11 @@ void alive()
     if(isOn)
       ledOn();
     else
-      ledOff();    
+      ledOff(); 
+
+     int val = analogRead(A0);
+     Serial.print("Wartosc detektora:");
+     Serial.println(val);
   }
 }
 
@@ -92,7 +137,9 @@ void loop() {
       Serial.println("Startujemy!!!");
       relayOff();
       shortBeep(100);
-      delay(2000);
+      delay(50);
+      shortBeep(100);
+      delay(1000);
       state = INIT;
       break;
     case INIT:
@@ -101,7 +148,7 @@ void loop() {
       {
         Serial.println("Swiatlosc nastapila - zapalenie za 5 minut");
         lightStartTime = millis();        
-        shortBeep(100);
+        shortBeep(50);
         state = LIGHT_DETECTED;
       }
       break;
@@ -110,13 +157,15 @@ void loop() {
       {
         Serial.print("Ciemnosc widze do odpalenia wiatraczka zostalo ");
         Serial.println( 5*60 - (millis() - lightStartTime)/1000 );
-        shortBeep(100);
+        shortBeep(50);
         state = INIT;
       }
       else if((millis() - lightStartTime) > triggerRelayTimeMs)//dalej zapalone przez 5s
       {
         Serial.println("Wlaczam wiatraczek");
-        shortBeep(2000);
+        shortBeep(100);
+        delay(50);
+        shortBeep(100);
         relayOn();
         state = LIGHT_DETECTED_RELAY_ON;
       }
@@ -125,7 +174,7 @@ void loop() {
       if(isDarkDetected())//zgaszone
       {
         Serial.println("Ciemnosc widze");
-        shortBeep(100);
+        shortBeep(50);
         lightEndTime = millis();
         int lightTimeSec = (lightEndTime - lightStartTime)/1000;
         Serial.print("Czas swiatla: ");
@@ -138,7 +187,7 @@ void loop() {
       if(isLightDetected())//zapalam
       {
         Serial.println("Swiatlosc nastapila kiedy stan = RELAY_ON");
-        shortBeep(100);
+        shortBeep(50);
         state = LIGHT_DETECTED_RELAY_ON;
       }
       else//caly czas zgaszone
@@ -153,7 +202,9 @@ void loop() {
         if(elapsedTimeSec > limitSec)//czy uplynelo wicej czasu niz polowa zapalone swiatla (max do 20 min)
         {
           Serial.println("Koniec!");
-          shortBeep(2000);
+          shortBeep(100);
+          delay(50);
+          shortBeep(100);
           state = INIT;
         }
       }      
